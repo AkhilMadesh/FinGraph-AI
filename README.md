@@ -46,6 +46,51 @@ Upload documents from **Knowledge Base**; once a document shows INDEXED, ask que
 - **AI Copilot**: asks questions in natural language; retrieves real records via a tool registry; generates grounded answers streamed from a local Ollama model. Falls back honestly to a deterministic evidence engine when Ollama is offline.
 - **AI Settings**: live Ollama status, installed-model discovery, model selection, generation test.
 
+## Python Backend (Stage 1 — foundation)
+
+A FastAPI backend now lives in `backend/`. It is the beginning of the migration
+described in the master plan: React → FastAPI → Python services → Postgres/pgvector/Ollama.
+
+**Stage 1 scope (implemented and tested):**
+- Typed configuration (`app/core/config.py`) with `.env.example` documentation.
+- Server-side authentication: Supabase access tokens verified independently (HS256 secret or JWKS fallback) — identity never comes from request bodies.
+- Database access with two supported modes: Supabase REST adapter (default — carries the user's bearer token so **RLS stays fully enforced**) and optional direct Postgres via SQLAlchemy when `DATABASE_URL` is set.
+- Health endpoints that measure, never assert: `/health/live`, `/health/ready`, `/api/v1/health/services` (database, Ollama, chat/embedding model presence, vector retrieval).
+- Python Ollama client: connection check, model discovery, generation, streaming, embeddings, timeouts.
+- First API endpoints: `GET /api/v1/dashboard/summary`, `GET /api/v1/ai/status`, `GET /api/v1/ai/models`, `POST /api/v1/ai/test`.
+- Pytest suite (12 tests, mocked HTTP) — all passing.
+- Frontend centralized API client (`src/lib/backendApi.ts`) — optional and inert until `VITE_API_BASE_URL` is set; the existing browser-side engine remains the default data path until each stage is verified.
+
+**Not yet migrated (Stages 2–9):** transactions/customers/merchants/alerts APIs, behavioural & temporal analytics, graph intelligence (NetworkX), risk engine, ML (scikit-learn), the 18-tool Copilot registry, streaming chat, RAG document pipeline, investigation services, and the Demo Lab controller — the working browser implementations remain authoritative for now.
+
+### Run the backend (Windows)
+
+```powershell
+cd backend
+
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+
+copy .env.example .env
+# Edit .env: set SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_JWT_SECRET
+# (Supabase dashboard -> Settings -> API -> JWT Secret)
+
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+- API: `http://localhost:8000` — interactive docs: `http://localhost:8000/docs`
+- Ollama must run on the same machine (`ollama serve`) for `OLLAMA_BASE_URL=http://127.0.0.1:11434` to work.
+- Tests: `python -m pytest tests/ -q` from `backend/`.
+
+### Frontend connection (optional, Stage 2+)
+
+```env
+# frontend .env — only set when running against the Python backend
+VITE_API_BASE_URL=http://localhost:8000/api/v1
+```
+
 ## Setup
 
 ### 1. Frontend
